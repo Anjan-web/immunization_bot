@@ -12,18 +12,19 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
 
 # ---------------------------------------------------------------------
-# ✅ 1.  Basic setup
+# ✅ 1. Basic setup
 # ---------------------------------------------------------------------
 load_dotenv()
 st.set_page_config(page_title="Immunization ChatBot", page_icon="🤖")
 st.title("📘 Immunization Guidelines Chatbot (Groq RAG)")
 
-VECTOR_DIR = Path("vectorstore_immunization/faiss_index")   # use forward slashes
+# Look for FAISS index in the current folder
+VECTOR_DIR = Path(".")   
 HF_MODEL = os.getenv("HF_EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 # ---------------------------------------------------------------------
-# ✅ 2.  Load vector store
+# ✅ 2. Load vector store
 # ---------------------------------------------------------------------
 @st.cache_resource(show_spinner=False)
 def load_vectorstore():
@@ -31,7 +32,7 @@ def load_vectorstore():
     return FAISS.load_local(str(VECTOR_DIR), emb, allow_dangerous_deserialization=True)
 
 # ---------------------------------------------------------------------
-# ✅ 3.  Prompt template
+# ✅ 3. Prompt template
 # ---------------------------------------------------------------------
 RAG_PROMPT = ChatPromptTemplate.from_template("""
 You are a helpful assistant answering strictly from the provided CONTEXT (excerpts of official guidelines).
@@ -56,10 +57,13 @@ def format_docs(docs):
     return "\n\n".join(chunks)
 
 # ---------------------------------------------------------------------
-# ✅ 4.  Build the retrieval + generation chain
+# ✅ 4. Build the retrieval + generation chain
 # ---------------------------------------------------------------------
-if not VECTOR_DIR.exists():
-    st.warning("No vector index found. Please run `python ingest.py` first.")
+faiss_index = Path("index.faiss")
+faiss_pkl = Path("index.pkl")
+
+if not faiss_index.exists() or not faiss_pkl.exists():
+    st.error("❌ FAISS index not found. Please ensure index.faiss and index.pkl are present in the repository.")
 else:
     vs = load_vectorstore()
     retriever = vs.as_retriever(search_type="similarity", search_kwargs={"k": 4})
@@ -73,12 +77,11 @@ else:
     )
 
     # -----------------------------------------------------------------
-    # ✅ 5.  Streamlit chat UI
+    # ✅ 5. Streamlit chat UI
     # -----------------------------------------------------------------
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    # Display previous messages
     for m in st.session_state.messages:
         with st.chat_message(m["role"]):
             st.markdown(m["content"])
@@ -86,12 +89,10 @@ else:
     user_input = st.chat_input("Ask a question from the guidelines…")
 
     if user_input:
-        # show user message
         st.session_state.messages.append({"role": "user", "content": user_input})
         with st.chat_message("user"):
             st.markdown(user_input)
 
-        # model reply
         with st.chat_message("assistant"):
             with st.spinner("Thinking…"):
                 try:
